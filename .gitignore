@@ -1,0 +1,18 @@
+# Security - Do NOT commit these files!
+auth.json
+auth.zip
+config.local.json
+*.secret
+*.credentials
+.env
+
+# PowerShell
+*.ps1.bak
+*.old
+
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# CSV
+*.csv
