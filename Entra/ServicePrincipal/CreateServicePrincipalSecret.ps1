@@ -4,27 +4,18 @@
     Creates or updates a service principal for MFA automation with assessment or full permissions.
 
 .DESCRIPTION
-    This script supports two modes for flexible customer engagement workflows:
-    
+    Creates or updates a service principal with client secret authentication for the
+    Phishing Resistant MFA framework.
+
     ASSESSMENT MODE (-AssessmentMode):
-    Creates a service principal with READ-ONLY permissions for running assessments:
-    - User.Read.All (read user information)
-    - Device.Read.All (read device information)
-    - Group.Read.All (read group information)
-    - Policy.Read.All (read policy configurations)
-    - RoleManagement.Read.Directory (read role assignments)
-    - Directory.Read.All (read directory data)
-    
+    Creates a service principal with READ-ONLY permissions suitable for assessments.
+
     FULL MODE (default):
-    Creates or upgrades a service principal with READ-WRITE permissions for enrollment/enforcement:
-    - All assessment mode permissions PLUS:
-    - Group.ReadWrite.All (create and manage groups)
-    - Policy.ReadWrite.ConditionalAccess (create and manage CAPs)
-    - Policy.ReadWrite.AuthenticationMethod (manage authentication methods)
-    - User.ReadWrite.All (GUID password reset for compliant users)
-    
-    The script intelligently:
-    - Checks for existing application and reuses it
+    Creates or upgrades a service principal with READ-WRITE permissions for
+    enrollment and enforcement.
+
+    The script:
+    - Checks for an existing application and reuses it
     - Detects valid non-expired secrets and reuses them
     - Upgrades permissions when switching from assessment to full mode
     - Grants admin consent automatically
@@ -42,15 +33,6 @@
     
     Generated auth.json location: Same directory as this script
     Secret expires after 30 days for security compliance
-    
-    RECOMMENDED WORKFLOW FOR CUSTOMER ENGAGEMENTS:
-    1. Customer runs: .\CreateServicePrincipal.ps1 -AssessmentMode
-    2. Customer shares auth.json securely with consultant
-    3. Consultant runs: .\EnrollmentPhase.ps1 -WhatIf
-    4. Consultant runs: .\PrivilegedAccountsPhase.ps1 -WhatIf
-    5. Customer reviews assessment reports
-    6. Customer runs: .\CreateServicePrincipal.ps1 (upgrades to full permissions)
-    7. Consultant runs enrollment and enforcement
 
 .EXAMPLE
     .\CreateServicePrincipal.ps1 -AssessmentMode
@@ -711,13 +693,13 @@ try {
         }
         catch {
             Write-Host "  ⚠ Failed to create ZIP automatically: $_" -ForegroundColor Yellow
-            Write-Host "  → Contact consultant for manual ZIP creation instructions" -ForegroundColor Cyan
+            Write-Host "  → You can manually create a password-protected ZIP of auth.json" -ForegroundColor Cyan
         }
     }
     
     if ($zipCreated) {
         Write-Host "  Location: $zipPath" -ForegroundColor Gray
-        Write-Host "\n  ✓ Ready to share with consultant" -ForegroundColor Green
+        Write-Host "`n  ✓ ZIP file ready for secure transfer" -ForegroundColor Green
         
         # Delete unencrypted auth.json for security
         try {
@@ -760,69 +742,4 @@ foreach ($perm in $selectedPermissions) {
     } else {
         Write-Host "   ✗ $($perm.Name) — admin consent required" -ForegroundColor Red
     }
-}
-
-if ($AssessmentMode) {
-    Write-Host "`n📊 Next Steps (Assessment Mode):" -ForegroundColor Cyan
-    Write-Host "   1. Email the auth.zip file to your consultant:" -ForegroundColor White
-    Write-Host "      • File location: $(Join-Path $PSScriptRoot 'auth.zip')" -ForegroundColor Green
-    Write-Host "      • Send via email or OneDrive/SharePoint" -ForegroundColor Gray
-    Write-Host "      • No password needed - consultant will extract the file" -ForegroundColor Gray
-    Write-Host "\n   2. Consultant runs assessments and provides reports" -ForegroundColor White
-    Write-Host "\n   3. Review assessment reports from consultant" -ForegroundColor White
-    Write-Host "\n   4. When ready for enrollment, upgrade permissions:" -ForegroundColor Yellow
-    Write-Host "      • Run: .\CreateServicePrincipal.ps1" -ForegroundColor Yellow
-    Write-Host "        (without -AssessmentMode flag)" -ForegroundColor Gray
-    Write-Host "      • Email the new auth.zip to consultant" -ForegroundColor Gray
-    Write-Host "\n   5. After engagement (IMPORTANT):" -ForegroundColor Yellow
-    Write-Host "      • Delete auth.zip from your machine" -ForegroundColor Red
-    Write-Host "      • Consultant will delete their copy" -ForegroundColor Gray
-    Write-Host "      • Delete service principal from Azure AD (optional)" -ForegroundColor Gray
-    Write-Host "      • Delete any email/cloud copies" -ForegroundColor Gray
-} else {
-    Write-Host "`n🚀 Next Steps (Full Mode):" -ForegroundColor Cyan
-    Write-Host "   1. Email the auth.zip file to your consultant:" -ForegroundColor White
-    Write-Host "      • File location: $(Join-Path $PSScriptRoot 'auth.zip')" -ForegroundColor Green
-    Write-Host "      • Send via email or OneDrive/SharePoint" -ForegroundColor Gray
-    Write-Host "      • No password needed - consultant will extract the file" -ForegroundColor Gray
-    Write-Host "\n   2. Consultant performs enrollment and enforcement" -ForegroundColor White
-    Write-Host "`n   3. Monitor secret expiration:" -ForegroundColor White
-    Write-Host "      • Secret expires: $($secret.EndDateTime.ToString('yyyy-MM-dd'))" -ForegroundColor Gray
-    Write-Host "      • Regenerate before expiry if needed" -ForegroundColor Gray
-    Write-Host "`n   4. After engagement (IMPORTANT):" -ForegroundColor Yellow
-    Write-Host "      • Delete auth.zip from your machine" -ForegroundColor Red
-    Write-Host "      • Consultant will delete their copy" -ForegroundColor Gray
-    Write-Host "      • Delete service principal from Azure AD (optional)" -ForegroundColor Gray
-    Write-Host "      • Delete any email/cloud copies" -ForegroundColor Gray
-}
-
-if (-not $reuseSecret) {
-Write-Host "`n╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-Write-Host "║  SECURITY BEST PRACTICES                                     ║" -ForegroundColor Yellow
-Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
-
-Write-Host "`n📁 Automated Security:" -ForegroundColor Cyan
-Write-Host "   ✓ auth.zip created automatically with password protection" -ForegroundColor White
-Write-Host "   ✓ Unencrypted auth.json deleted (only ZIP remains)" -ForegroundColor White
-Write-Host "   ✓ 30-day credential expiration" -ForegroundColor White
-Write-Host "   ✓ Never commit to Git/source control (.gitignore included)" -ForegroundColor White
-
-Write-Host "`n🔐 Secure Sharing Method:" -ForegroundColor Cyan
-Write-Host "   1. Email auth.zip to consultant:" -ForegroundColor White
-Write-Host "      • Use email or OneDrive/SharePoint with 7-day link expiration" -ForegroundColor Gray
-Write-Host "      • File is password-protected (consultant has password)" -ForegroundColor Gray
-Write-Host "   2. Consultant extracts and uses credentials" -ForegroundColor White
-Write-Host "      • No customer action required" -ForegroundColor Gray
-
-Write-Host "`n⏰ Time-Limited Access:" -ForegroundColor Cyan
-Write-Host "   • Secret valid for 30 days only" -ForegroundColor White
-Write-Host "   • Typical engagement: 1-4 weeks" -ForegroundColor Gray
-Write-Host "   • Automatic expiration adds security layer" -ForegroundColor Gray
-
-Write-Host "`n🗑️  Cleanup Checklist (After Engagement):" -ForegroundColor Cyan
-Write-Host "   ☐ Delete auth.zip from your machine" -ForegroundColor White
-Write-Host "   ☐ Remove from email/OneDrive/SharePoint" -ForegroundColor White
-Write-Host "   ☐ Empty Recycle Bin / Deleted Items" -ForegroundColor White
-Write-Host "   ☐ (Optional) Delete service principal from Azure AD:" -ForegroundColor Gray
-Write-Host "      Azure Portal > App registrations > $appDisplayName > Delete" -ForegroundColor Gray
 }
