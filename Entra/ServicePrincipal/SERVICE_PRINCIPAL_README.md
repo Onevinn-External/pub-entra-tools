@@ -1,6 +1,6 @@
 # Service Principal Authentication for Phishing Resistant MFA Project
 
-This guide explains how to set up and use service principal authentication.
+This guide explains how to set up and use service principal authentication with the EnrollmentPhase script.
 
 ## Quick Start
 
@@ -25,36 +25,65 @@ This script will:
 - **Automatically create password-protected `auth.zip`**
 - Delete unencrypted `auth.json` for security
 
-✅ **Result**: A secure `auth.zip` file ready for transfer
+✅ **Result**: A secure `auth.zip` file ready to share with your consultant
 
-### Step 2: Share the Credentials
+### Step 2: Share the Credentials with Consultant
 
 After running the script, you'll have an `auth.zip` file in the same directory.
 
 #### Option A: Email
 1. Attach `auth.zip` to an email
-2. Send to the designated recipient
+2. Send to your consultant
+3. ✅ File is password-protected (consultant has the password)
 
 #### Option B: OneDrive/SharePoint
 1. Upload `auth.zip` to OneDrive or SharePoint
 2. Create a sharing link with **7-day expiration**
-3. Share the link
+3. Send the link to your consultant
+4. ✅ File is password-protected (consultant has the password)
 
 ⚠️ **Important**: 
 - The ZIP file is already password-protected
+- Consultant will handle the password
+- No additional steps needed from you
 - **Do NOT** send the file via unencrypted chat/messaging apps
 
+### Step 3: Consultant Runs Assessment/Enrollment
 
-### Step 3: After Engagement Cleanup
+The consultant will:
+1. Extract `auth.json` from the password-protected ZIP
+2. Run the appropriate scripts in your tenant
+
+#### For Assessment Mode:
+```powershell
+.\EnrollmentPhase.ps1 -WhatIf -AuthMode ServicePrincipal
+.\PrivilegedAccountsPhase.ps1 -WhatIf -AuthMode ServicePrincipal
+```
+
+#### For Full Mode:
+```powershell
+.\EnrollmentPhase.ps1 -AuthMode ServicePrincipal
+.\PrivilegedAccountsPhase.ps1 -AuthMode ServicePrincipal
+.\EnforcementPhase.ps1 -AuthMode ServicePrincipal
+```
+
+### Step 4: After Engagement Cleanup
 
 **Important**: Clean up after the engagement is complete:
 
+✅ **Customer Actions:**
 - [ ] Delete `auth.zip` from your machine
 - [ ] Delete from email inbox/sent items
 - [ ] Delete from OneDrive/SharePoint
 - [ ] Empty Recycle Bin / Deleted Items
-- [ ] (Optional) Delete service principal from Entra ID:
+- [ ] (Optional) Delete service principal from Azure AD:
   - Azure Portal → App registrations → `sp-onevinn-prmfa` → Delete
+
+✅ **Consultant Actions:**
+- [ ] Delete `auth.zip` after extraction
+- [ ] Delete extracted `auth.json`
+- [ ] Remove from Downloads folder
+- [ ] Empty Recycle Bin
 
 ## What's in the Secure Package?
 
@@ -79,6 +108,16 @@ The `auth.zip` file is password-protected and contains `auth.json` with:
   "expiresDate": "2026-02-03 14:30:00"
 }
 ```
+
+## Security Best Practices
+
+1. **Never commit `auth.json`** to version control
+2. **Add to `.gitignore`**: The `.gitignore` file already includes this
+3. **Rotate secrets regularly**: Service principal secrets should be rotated every year
+4. **Monitor usage**: Check Microsoft Graph audit logs for service principal activity
+5. **Use least privilege**: The service principal has only necessary permissions
+6. **Secure the file**: Restrict file permissions on `auth.json`
+7. **Environment variables**: Consider storing in Azure Key Vault for production
 
 ## Renewing Service Principal Secret
 
