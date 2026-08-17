@@ -108,7 +108,7 @@ function Invoke-PwPush {
     }
     
     try {
-        $response = Invoke-PwPush -Payload ($pwpushPayload | ConvertTo-Json) -ErrorAction Stop
+        $response = pwpush\Invoke-PwPush -Payload ($pwpushPayload | ConvertTo-Json) -ErrorAction Stop
         return $response.link
     }
     catch {
