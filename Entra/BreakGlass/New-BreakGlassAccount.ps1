@@ -18,9 +18,13 @@ param(
     [switch]$Interactive
 )
 
-# Connect to Microsoft Graph
-if ($Interactive) {
-    Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess" -TenantId $TenantId
+# Connect to Microsoft Graph (if not already connected)
+$ctx = $null
+try { $ctx = Get-MgContext } catch { }
+if (-not $ctx) {
+    $connectParams = @{ Scopes = @("User.ReadWrite.All", "Group.ReadWrite.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess") }
+    if ($TenantId) { $connectParams.TenantId = $TenantId }
+    Connect-MgGraph @connectParams
 }
 
 function New-RandomAccountName {
