@@ -143,8 +143,14 @@ try {
             Write-Host "  ✗ Certificate file not found: $CertificatePath" -ForegroundColor Red
             exit 1
         }
-        $fileBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $CertificatePath).Path)
-        $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($fileBytes)
+        $resolvedPath = (Resolve-Path $CertificatePath).Path
+        if ([System.IO.Path]::GetExtension($resolvedPath) -match '\.pem$') {
+            $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPemFile($resolvedPath)
+        }
+        else {
+            $fileBytes = [System.IO.File]::ReadAllBytes($resolvedPath)
+            $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($fileBytes)
+        }
         $publicCertBytes = $publicCert.RawData
         Write-Host "  ✓ Loaded from file: $CertificatePath" -ForegroundColor Green
     }
