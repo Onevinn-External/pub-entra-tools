@@ -210,7 +210,7 @@ try {
     # Output summary
     Write-Host "`n=== Break Glass Setup Complete ===" -ForegroundColor Green
     Write-Host "Account 1: $($account1.User.UserPrincipalName)"
-    Write-Host "  Password: $($account1.Password)"
+    Write-Host "  Password: [REDACTED]"
     Write-Host "  TAP Link: $tap1Link"
     Write-Host ""
     Write-Host "Account 2: $($account2.User.UserPrincipalName)"
