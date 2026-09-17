@@ -171,6 +171,7 @@ $selectedPermissions = if ($AssessmentMode) {
     Write-Host "  Mode: Full (Assessment + Enrollment/Enforcement)" -ForegroundColor Green
     @($assessmentPermissions + $fullModeAdditionalPermissions | Group-Object -Property Name | ForEach-Object { $_.Group[0] })
 }
+$managedPermissionIds = @($assessmentPermissions + $fullModeAdditionalPermissions | Group-Object -Property Id | ForEach-Object { $_.Group[0].Id })
 
 Write-Host "`n  Permissions to be assigned:" -ForegroundColor Gray
 foreach ($perm in $selectedPermissions) {
@@ -386,7 +387,7 @@ try {
                 $microsoftGraphSP = Get-MgServicePrincipal -Filter "appId eq '$microsoftGraphResourceId'" -ErrorAction Stop | Select-Object -First 1
                 $selectedPermissionIds = $selectedPermissions | ForEach-Object { $_.Id }
                 $assignmentsToRevoke = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $existingSP.Id -All -ErrorAction SilentlyContinue |
-                    Where-Object { $_.ResourceId -eq $microsoftGraphSP.Id -and $_.AppRoleId -and $_.AppRoleId -notin $selectedPermissionIds }
+                    Where-Object { $_.ResourceId -eq $microsoftGraphSP.Id -and $_.AppRoleId -in $managedPermissionIds -and $_.AppRoleId -notin $selectedPermissionIds }
 
                 foreach ($assignment in $assignmentsToRevoke) {
                     Remove-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $existingSP.Id -AppRoleAssignmentId $assignment.Id -ErrorAction Stop
