@@ -381,6 +381,19 @@ try {
         }
         
         try {
+            $existingSP = Get-MgServicePrincipal -Filter "appId eq '$($app.AppId)'" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($existingSP) {
+                $microsoftGraphSP = Get-MgServicePrincipal -Filter "appId eq '$microsoftGraphResourceId'" -ErrorAction Stop | Select-Object -First 1
+                $selectedPermissionIds = $selectedPermissions | ForEach-Object { $_.Id }
+                $assignmentsToRevoke = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $existingSP.Id -All -ErrorAction SilentlyContinue |
+                    Where-Object { $_.ResourceId -eq $microsoftGraphSP.Id -and $_.AppRoleId -and $_.AppRoleId -notin $selectedPermissionIds }
+
+                foreach ($assignment in $assignmentsToRevoke) {
+                    Remove-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $existingSP.Id -AppRoleAssignmentId $assignment.Id -ErrorAction Stop
+                    Write-Host "   ✓ Revoked stale permission assignment: $($assignment.AppRoleId)" -ForegroundColor Green
+                }
+            }
+
             Update-MgApplication -ApplicationId $app.Id -BodyParameter $params -ErrorAction Stop
             Write-Host "   ✓ Permissions updated" -ForegroundColor Green
         }
