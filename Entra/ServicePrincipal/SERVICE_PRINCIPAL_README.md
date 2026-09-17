@@ -75,7 +75,7 @@ The consultant will:
 - [ ] Delete from OneDrive/SharePoint
 - [ ] Empty Recycle Bin / Deleted Items
 - [ ] (Optional) Delete service principal from Azure AD:
-  - Azure Portal → App registrations → `sp-onevinn-prmfa` → Delete
+  - Azure Portal → App registrations → `sp-onevinn` → Delete
 
 ✅ **Consultant Actions:**
 - [ ] Delete `auth.zip` after extraction
