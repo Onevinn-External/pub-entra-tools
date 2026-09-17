@@ -1,7 +1,6 @@
 # Security - Do NOT commit these files!
-auth.json
-auth.zip
-config.local.json
+*.auth.json
+*.auth.zip
 *.secret
 *.credentials
 .env
