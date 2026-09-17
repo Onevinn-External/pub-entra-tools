@@ -12,9 +12,7 @@ This guide explains how to set up and use service principal authentication with 
 ```
 
 #### For Full Mode (Read-Write)
-```powershell
-.\CreateServicePrincipal.ps1
-```
+.\CreateServicePrincipal.ps1 -FullMode
 
 This script will:
 - Create an Entra ID application
