@@ -14,7 +14,7 @@
     - RoleManagement.Read.Directory (read role assignments)
     - Directory.Read.All (read directory data)
     
-    FULL MODE (default):
+    FULL MODE (-FullMode):
     Creates or upgrades a service principal with READ-WRITE permissions for enrollment/enforcement:
     - All assessment mode permissions PLUS:
     - Group.ReadWrite.All (create and manage groups)
@@ -31,7 +31,9 @@
 
 .PARAMETER AssessmentMode
     When specified, creates service principal with read-only permissions suitable for assessments.
-    When omitted, creates/upgrades to full read-write permissions for enrollment and enforcement.
+
+.PARAMETER FullMode
+    When specified, creates or upgrades the service principal with the full permission set.
 
 .NOTES
     Requirements:
@@ -48,7 +50,7 @@
     3. Consultant runs: .\EnrollmentPhase.ps1 -WhatIf
     4. Consultant runs: .\PrivilegedAccountsPhase.ps1 -WhatIf
     5. Customer reviews assessment reports
-    6. Customer runs: .\CreateServicePrincipal.ps1 (upgrades to full permissions)
+    6. Customer runs: .\CreateServicePrincipal.ps1 -FullMode (upgrades to full permissions)
     7. Consultant runs enrollment and enforcement
 
 .EXAMPLE
@@ -56,7 +58,7 @@
     # Creates service principal with read-only permissions for assessments
     
 .EXAMPLE
-    .\CreateServicePrincipal.ps1
+    .\CreateServicePrincipal.ps1 -FullMode
     # Creates or upgrades service principal with full read-write permissions
 #>
 
@@ -66,8 +68,16 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [switch]$AssessmentMode
+    [switch]$AssessmentMode,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$FullMode
 )
+
+if ($AssessmentMode -eq $FullMode) {
+    Write-Error 'Specify exactly one mode: -AssessmentMode or -FullMode.'
+    exit 1
+}
 
 # ============================================================================
 # SCRIPT CONFIGURATION
@@ -107,17 +117,39 @@ Write-Host "`nDefining permission sets..." -ForegroundColor Cyan
 # Microsoft Graph resource ID
 $microsoftGraphResourceId = "00000003-0000-0000-c000-000000000000"
 
-# Assessment Mode Permissions (Read-Only) - Using Application permissions (Role)
+# Assessment Mode Permissions (Read-Only) - Using Application permissions (Role).
+# This is the union of the requested assessment and inventory permission lists.
 $assessmentPermissions = @(
-    @{ Id = "df021288-bdef-4463-88db-98f22de89214"; Type = "Role"; Name = "User.Read.All" },
+    @{ Id = "b0afded3-3588-46d8-8b3d-9842eff778da"; Type = "Role"; Name = "AuditLog.Read.All" },
+    @{ Id = "cac88765-0581-4025-9725-5ebc13f729ee"; Type = "Role"; Name = "CrossTenantInformation.ReadBasic.All" },
+    @{ Id = "7a6ee1e7-141e-4cec-ae74-d9db155731ff"; Type = "Role"; Name = "DeviceManagementApps.Read.All" },
+    @{ Id = "dc377aa6-52d8-4e23-b271-2a7ae04cedf3"; Type = "Role"; Name = "DeviceManagementConfiguration.Read.All" },
+    @{ Id = "2f51be20-0bb4-4fed-bf7b-db946066c75e"; Type = "Role"; Name = "DeviceManagementManagedDevices.Read.All" },
+    @{ Id = "58ca0d9a-1575-47e1-a3cb-007ef2e4583b"; Type = "Role"; Name = "DeviceManagementRBAC.Read.All" },
+    @{ Id = "06a5fe6d-c49d-46a7-b082-56b1b14103c7"; Type = "Role"; Name = "DeviceManagementServiceConfig.Read.All" },
     @{ Id = "7ab1d382-f21e-4acd-a863-ba3e13f7da61"; Type = "Role"; Name = "Directory.Read.All" },
-    @{ Id = "5b567255-7703-4780-807c-7be8301ae99b"; Type = "Role"; Name = "Group.Read.All" },
+    @{ Id = "ae73097b-cb2a-4447-b064-5d80f6093921"; Type = "Role"; Name = "DirectoryRecommendations.Read.All" },
+    @{ Id = "c74fd47d-ed3c-45c3-9a9e-b8676de685d2"; Type = "Role"; Name = "EntitlementManagement.Read.All" },
+    @{ Id = "6e472fd1-ad78-48da-a0f0-97ab2c6b769e"; Type = "Role"; Name = "IdentityRiskEvent.Read.All" },
+    @{ Id = "dc5007c0-2d7d-4c42-879c-2dab87571379"; Type = "Role"; Name = "IdentityRiskyUser.Read.All" },
+    @{ Id = "607c7344-0eed-41e5-823a-9695ebe1b7b0"; Type = "Role"; Name = "IdentityRiskyServicePrincipal.Read.All" },
+    @{ Id = "e30060de-caa5-4331-99d3-6ac6c966a9a4"; Type = "Role"; Name = "NetworkAccess.Read.All" },
+    @{ Id = "bb70e231-92dc-4729-aff5-697b3f04be95"; Type = "Role"; Name = "OnPremDirectorySynchronization.Read.All" },
+    @{ Id = "56c84fa9-ea1f-4a15-90f2-90ef41ece2c9"; Type = "Role"; Name = "OrgSettings-AppsAndServices.Read.All" },
+    @{ Id = "434d7c66-07c6-4b1f-ab21-417cf2cdaaca"; Type = "Role"; Name = "OrgSettings-Forms.Read.All" },
     @{ Id = "246dd0d5-5bd0-4def-940b-0421030a5b68"; Type = "Role"; Name = "Policy.Read.All" },
-    @{ Id = "483bed4a-2ad3-4361-a73b-c83ccdbdc53c"; Type = "Role"; Name = "RoleManagement.Read.Directory" },
-    @{ Id = "01e37dc9-c035-40bd-b438-b2879c4870a6"; Type = "Role"; Name = "PrivilegedAccess.Read.AzureADGroup" },
-    @{ Id = "7438b122-aefc-4978-80ed-43db9fcc7715"; Type = "Role"; Name = "Device.Read.All" },
-    @{ Id = "38d9df27-64da-44fd-b7c5-a6fbac20248f"; Type = "Role"; Name = "UserAuthenticationMethod.Read.All" },
-    @{ Id = "b0afded3-3588-46d8-8b3d-9842eff778da"; Type = "Role"; Name = "AuditLog.Read.All" }
+    @{ Id = "37730810-e9ba-4e46-b07e-8ca78d182097"; Type = "Role"; Name = "Policy.Read.ConditionalAccess" },
+    @{ Id = "9e640839-a198-48fb-8b9a-013fd6f6cbcd"; Type = "Role"; Name = "Policy.Read.PermissionGrant" },
+    @{ Id = "230c1aed-a721-4c5d-9cb4-a90514e508ef"; Type = "Role"; Name = "Reports.Read.All" },
+    @{ Id = "ee353f83-55ef-4b78-82da-555bfa2b4b95"; Type = "Role"; Name = "ReportSettings.Read.All" },
+    @{ Id = "ff278e11-4a33-4d0c-83d2-d01dc58929a5"; Type = "Role"; Name = "RoleEligibilitySchedule.Read.Directory" },
+    @{ Id = "c7fbd983-d9aa-4fa7-84b8-17382c103bc4"; Type = "Role"; Name = "RoleManagement.Read.All" },
+    @{ Id = "ef31918f-2d50-4755-8943-b8638c0a077e"; Type = "Role"; Name = "RoleManagementAlert.Read.Directory" },
+    @{ Id = "5f0ffea2-f474-4cf2-9834-61cda2bcea5c"; Type = "Role"; Name = "SecurityIdentitiesSensors.Read.All" },
+    @{ Id = "f8dcd971-5d83-4e1e-aa95-ef44611ad351"; Type = "Role"; Name = "SecurityIdentitiesHealth.Read.All" },
+    @{ Id = "83d4163d-a2d8-4d3b-9695-4ae3ca98f888"; Type = "Role"; Name = "SharePointTenantSettings.Read.All" },
+    @{ Id = "dd98c7f5-2d42-42d3-a0e4-633161547251"; Type = "Role"; Name = "ThreatHunting.Read.All" },
+    @{ Id = "38d9df27-64da-44fd-b7c5-a6fbac20248f"; Type = "Role"; Name = "UserAuthenticationMethod.Read.All" }
 )
 
 # Additional permissions for Full Mode (Read-Write) - Using Application permissions (Role)
@@ -127,17 +159,19 @@ $fullModeAdditionalPermissions = @(
     @{ Id = "29c18626-4985-4dcd-85c0-193eef327366"; Type = "Role"; Name = "Policy.ReadWrite.AuthenticationMethod" },
     @{ Id = "9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8"; Type = "Role"; Name = "RoleManagement.ReadWrite.Directory" },
     @{ Id = "741f803b-c850-494e-b5df-cde7c675a1ca"; Type = "Role"; Name = "User.ReadWrite.All" },
-    @{ Id = "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30"; Type = "Role"; Name = "Application.Read.All" }
+    @{ Id = "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30"; Type = "Role"; Name = "Application.Read.All" },
+    @{ Id = "2a60023f-3219-47ad-baa4-40e17cd02a1d"; Type = "Role"; Name = "ReportSettings.ReadWrite.All" }
 )
 
-# Select permission set based on mode
+# Select permission set based on mode and remove duplicate permission names.
 $selectedPermissions = if ($AssessmentMode) {
     Write-Host "  Mode: Assessment (Read-Only)" -ForegroundColor Yellow
-    $assessmentPermissions
+    @($assessmentPermissions)
 } else {
     Write-Host "  Mode: Full (Assessment + Enrollment/Enforcement)" -ForegroundColor Green
-    $assessmentPermissions + $fullModeAdditionalPermissions
+    @($assessmentPermissions + $fullModeAdditionalPermissions | Group-Object -Property Name | ForEach-Object { $_.Group[0] })
 }
+$managedPermissionIds = @($assessmentPermissions + $fullModeAdditionalPermissions | Group-Object -Property Id | ForEach-Object { $_.Group[0].Id })
 
 Write-Host "`n  Permissions to be assigned:" -ForegroundColor Gray
 foreach ($perm in $selectedPermissions) {
@@ -239,7 +273,7 @@ Write-Host "`n╔═════════════════════
 Write-Host "║  STEP 1: Application Registration                            ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 
-$appDisplayName = "sp-onevinn-prmfa"
+$appDisplayName = "sp-onevinn"
 $app = $null
 $existingSecret = $null
 $reuseSecret = $false
@@ -348,6 +382,19 @@ try {
         }
         
         try {
+            $existingSP = Get-MgServicePrincipal -Filter "appId eq '$($app.AppId)'" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($existingSP) {
+                $microsoftGraphSP = Get-MgServicePrincipal -Filter "appId eq '$microsoftGraphResourceId'" -ErrorAction Stop | Select-Object -First 1
+                $selectedPermissionIds = $selectedPermissions | ForEach-Object { $_.Id }
+                $assignmentsToRevoke = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $existingSP.Id -All -ErrorAction SilentlyContinue |
+                    Where-Object { $_.ResourceId -eq $microsoftGraphSP.Id -and $_.AppRoleId -in $managedPermissionIds -and $_.AppRoleId -notin $selectedPermissionIds }
+
+                foreach ($assignment in $assignmentsToRevoke) {
+                    Remove-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $existingSP.Id -AppRoleAssignmentId $assignment.Id -ErrorAction Stop
+                    Write-Host "   ✓ Revoked stale permission assignment: $($assignment.AppRoleId)" -ForegroundColor Green
+                }
+            }
+
             Update-MgApplication -ApplicationId $app.Id -BodyParameter $params -ErrorAction Stop
             Write-Host "   ✓ Permissions updated" -ForegroundColor Green
         }
@@ -742,8 +789,8 @@ if ($AssessmentMode) {
     Write-Host "\n   2. Consultant runs assessments and provides reports" -ForegroundColor White
     Write-Host "\n   3. Review assessment reports from consultant" -ForegroundColor White
     Write-Host "\n   4. When ready for enrollment, upgrade permissions:" -ForegroundColor Yellow
-    Write-Host "      • Run: .\CreateServicePrincipal.ps1" -ForegroundColor Yellow
-    Write-Host "        (without -AssessmentMode flag)" -ForegroundColor Gray
+    Write-Host "      • Run: .\CreateServicePrincipal.ps1 -FullMode" -ForegroundColor Yellow
+    Write-Host "        (explicitly approve the full permission set)" -ForegroundColor Gray
     Write-Host "      • Email the new auth.zip to consultant" -ForegroundColor Gray
     Write-Host "\n   5. After engagement (IMPORTANT):" -ForegroundColor Yellow
     Write-Host "      • Delete auth.zip from your machine" -ForegroundColor Red
