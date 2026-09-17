@@ -1,4 +1,4 @@
-#Requires -Module Microsoft.Graph.Users, Microsoft.Graph.Groups, Microsoft.Graph.Identity.SignIns, pwpush
+#Requires -Module Microsoft.Graph.Users, Microsoft.Graph.Groups, Microsoft.Graph.Identity.SignIns, KpPwpush
 <#
 .SYNOPSIS
 Creates 2 break-glass accounts with TAPs and adds them to a privileged group while excluding from MFA policies.
@@ -20,78 +20,116 @@ param(
 
 # Connect to Microsoft Graph
 if ($Interactive) {
-    Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess" -TenantId $TenantId
+    Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess", "UserAuthenticationMethod.ReadWrite.All" -TenantId $TenantId
 }
+
+# KpPwpush must be initialized before New-KpPwpush can be used
+Connect-KpPwpush | Out-Null
 
 function New-RandomAccountName {
     <#
     .SYNOPSIS
-    Generates a random name for break-glass accounts
+    Generates a realistic first/last name so the account blends in as a regular person
     #>
-    $adjectives = @("swift", "brave", "bold", "quick", "sharp", "strong", "smart", "wise")
-    $nouns = @("eagle", "falcon", "tiger", "lion", "wolf", "bear", "hawk", "phoenix")
+    $firstNames = @("James", "Emma", "Liam", "Olivia", "Noah", "Ava", "William", "Sophia", "Lucas", "Isabella", "Henry", "Mia", "Oscar", "Amelia", "Leo", "Charlotte")
+    $lastNames = @("Andersson", "Johansson", "Karlsson", "Nilsson", "Eriksson", "Larsson", "Olsson", "Persson", "Svensson", "Gustafsson", "Pettersson", "Jonsson")
     
-    $adjective = $adjectives | Get-Random
-    $noun = $nouns | Get-Random
-    $random = Get-Random -Minimum 100 -Maximum 999
+    $firstName = $firstNames | Get-Random
+    $lastName = $lastNames | Get-Random
     
-    return "bg-$adjective-$noun-$random"
+    return [PSCustomObject]@{
+        FirstName = $firstName
+        LastName  = $lastName
+    }
 }
 
 function New-BreakGlassAccount {
     <#
     .SYNOPSIS
-    Creates a single break-glass account with specified parameters
+    Creates a single break-glass account with a non-identifiable name
     #>
-    param(
-        [string]$UserPrincipalNamePrefix
-    )
-    
-    $displayName = "Break Glass - $(New-RandomAccountName)"
-    $upn = "$UserPrincipalNamePrefix@$((Get-MgOrganization).VerifiedDomains[0].Name)"
-    $password = [guid]::NewGuid().ToString()
+    # No parameters - name is fully randomized so the account isn't identifiable as break-glass
+    $randomName = New-RandomAccountName
+    $displayName = "$($randomName.FirstName) $($randomName.LastName)"
+    # Trailing digit avoids UPN collisions between the two generated accounts, matching common corporate naming
+    $mailNickname = "$($randomName.FirstName).$($randomName.LastName)$(Get-Random -Minimum 1 -Maximum 99)".ToLower()
+    # Break-glass accounts must use the tenant root (*.onmicrosoft.com) domain - cloud-only, unaffected by federation/custom-domain outages
+    $rootDomain = (Get-MgOrganization).VerifiedDomains | Where-Object { $_.IsInitial } | Select-Object -First 1
+    $upn = "$mailNickname@$($rootDomain.Name)"
+    $password = ConvertTo-SecureString ([guid]::NewGuid().ToString()) -AsPlainText -Force
     
     # Create user account
     $userParams = @{
         UserPrincipalName            = $upn
         DisplayName                  = $displayName
-        MailNickname                 = $displayName.Replace(" ", "").ToLower()
+        MailNickname                 = $mailNickname
         PasswordProfile              = @{
             ForceChangePasswordNextSignIn = $false
-            Password                      = $password
+            Password                      = [System.Net.NetworkCredential]::new('', $password).Password
         }
         AccountEnabled               = $true
     }
     
     $user = New-MgUser @userParams
-    Write-Host "Created user: $upn" -ForegroundColor Green
-    
     return @{
         User     = $user
         Password = $password
     }
 }
 
+function Get-TemporaryAccessPassPolicy {
+    <#
+    .SYNOPSIS
+    Reads the tenant's TemporaryAccessPass authentication method policy constraints
+    #>
+    $config = Get-MgPolicyAuthenticationMethodPolicyAuthenticationMethodConfiguration -AuthenticationMethodConfigurationId TemporaryAccessPass
+    $props = $config.AdditionalProperties
+    
+    return [PSCustomObject]@{
+        # When true, the tenant forces one-time-use TAPs; otherwise reusable TAPs are allowed
+        IsUsableOnce      = [bool]$props.isUsableOnce
+        MaxLifetimeMinutes = [int]$props.maximumLifetimeInMinutes
+    }
+}
+
 function New-TemporaryAccessPass {
     <#
     .SYNOPSIS
-    Creates a Temporary Access Pass (TAP) for a user
+    Creates a Temporary Access Pass (TAP) for a user, honoring the tenant's policy constraints
     #>
     param(
-        [string]$UserId
+        [string]$UserId,
+        [bool]$IsUsableOnce,
+        [int]$LifetimeMinutes
     )
     
     $tapParams = @{
-        isUsableOnce = $false
-        lifetime     = 43200 # 30 days in minutes
+        startDateTime     = (Get-Date).ToUniversalTime()
+        isUsableOnce      = $IsUsableOnce
+        lifetimeInMinutes = $LifetimeMinutes
     }
     
-    $tap = New-MgUserAuthenticationTemporaryAccessPass -UserId $UserId -BodyParameter $tapParams
-    
-    return $tap.TemporaryAccessPass
+    # Newly created users can take a few seconds to replicate before auth methods can be added to them
+    $maxAttempts = 5
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        try {
+            $tap = New-MgUserAuthenticationTemporaryAccessPassMethod -UserId $UserId -BodyParameter $tapParams -ErrorAction Stop
+            # The TAP code isn't always mapped to a strongly-typed property; fall back to AdditionalProperties
+            if ($tap.TemporaryAccessPass) {
+                return $tap.TemporaryAccessPass
+            }
+            return $tap.AdditionalProperties.temporaryAccessPass
+        }
+        catch {
+            if ($attempt -eq $maxAttempts) {
+                throw
+            }
+            Start-Sleep -Seconds ($attempt * 5)
+        }
+    }
 }
 
-function Invoke-PwPush {
+function Send-TapViaPwPush {
     <#
     .SYNOPSIS
     Pushes TAP to pwpush and returns share link
@@ -101,18 +139,11 @@ function Invoke-PwPush {
         [string]$AccountUpn
     )
     
-    $pwpushPayload = @{
-        password     = $TapCode
-        payload_type = "note"
-        note         = "TAP for $AccountUpn - Break Glass Account. Delete after use."
-    }
-    
     try {
-        $response = Invoke-PwPush -Payload ($pwpushPayload | ConvertTo-Json) -ErrorAction Stop
-        return $response.link
+        $response = New-KpPwpush -Payload $TapCode -Note "TAP for $AccountUpn. Delete after use." -ErrorAction Stop
+        return $response.html_url
     }
     catch {
-        Write-Warning "Failed to push TAP to pwpush: $_"
         return $TapCode
     }
 }
@@ -135,8 +166,6 @@ function New-PrivilegedGroup {
     }
     
     $group = New-MgGroup @groupParams
-    Write-Host "Created group: psg-ice ($($group.Id))" -ForegroundColor Green
-    
     # Add members
     foreach ($memberId in $MemberIds) {
         New-MgGroupMember -GroupId $group.Id -DirectoryObjectId $memberId
@@ -170,8 +199,9 @@ function Update-ConditionalAccessPolicies {
             
             if ($GroupId -notin $policy.Conditions.Users.ExcludeGroups) {
                 $policy.Conditions.Users.ExcludeGroups += $GroupId
-                Update-MgIdentityConditionalAccessPolicy -ConditionalAccessPolicyId $policy.Id -BodyParameter $policy
-                Write-Host "Updated policy: $($policy.DisplayName)" -ForegroundColor Green
+                # Only mutable properties may be sent; the full policy object includes read-only fields that fail schema validation
+                $updateBody = @{ conditions = $policy.Conditions }
+                Update-MgIdentityConditionalAccessPolicy -ConditionalAccessPolicyId $policy.Id -BodyParameter $updateBody
             }
         }
     }
@@ -179,39 +209,33 @@ function Update-ConditionalAccessPolicies {
 
 # Main execution
 try {
-    Write-Host "=== Break Glass Account Creation ===" -ForegroundColor Cyan
-    
     # Create 2 break-glass accounts
-    Write-Host "Creating break-glass accounts..." -ForegroundColor Yellow
-    $account1 = New-BreakGlassAccount -UserPrincipalNamePrefix "bg-account-1"
-    $account2 = New-BreakGlassAccount -UserPrincipalNamePrefix "bg-account-2"
+    $account1 = New-BreakGlassAccount
+    $account2 = New-BreakGlassAccount
     
-    # Create TAPs
-    Write-Host "Generating Temporary Access Passes..." -ForegroundColor Yellow
-    $tap1 = New-TemporaryAccessPass -UserId $account1.User.Id
-    $tap2 = New-TemporaryAccessPass -UserId $account2.User.Id
+    # Create TAPs, honoring whatever the tenant's TemporaryAccessPass policy allows
+    $tapPolicy = Get-TemporaryAccessPassPolicy
+    $tap1 = New-TemporaryAccessPass -UserId $account1.User.Id -IsUsableOnce $tapPolicy.IsUsableOnce -LifetimeMinutes $tapPolicy.MaxLifetimeMinutes
+    $tap2 = New-TemporaryAccessPass -UserId $account2.User.Id -IsUsableOnce $tapPolicy.IsUsableOnce -LifetimeMinutes $tapPolicy.MaxLifetimeMinutes
     
     # Push TAPs via pwpush
-    Write-Host "Pushing TAPs to pwpush..." -ForegroundColor Yellow
-    $tap1Link = Invoke-PwPush -TapCode $tap1 -AccountUpn $account1.User.UserPrincipalName
-    $tap2Link = Invoke-PwPush -TapCode $tap2 -AccountUpn $account2.User.UserPrincipalName
+    $tap1Link = Send-TapViaPwPush -TapCode $tap1 -AccountUpn $account1.User.UserPrincipalName
+    $tap2Link = Send-TapViaPwPush -TapCode $tap2 -AccountUpn $account2.User.UserPrincipalName
     
     # Create privileged group
-    Write-Host "Creating privileged group 'psg-ice'..." -ForegroundColor Yellow
     $group = New-PrivilegedGroup -MemberIds @($account1.User.Id, $account2.User.Id)
     
     # Update Conditional Access Policies
-    Write-Host "Updating Conditional Access Policies..." -ForegroundColor Yellow
     Update-ConditionalAccessPolicies -GroupId $group.Id
     
     # Output summary
     Write-Host "`n=== Break Glass Setup Complete ===" -ForegroundColor Green
     Write-Host "Account 1: $($account1.User.UserPrincipalName)"
-    Write-Host "  Password: $($account1.Password)"
+    Write-Host "  Password: [REDACTED]"
     Write-Host "  TAP Link: $tap1Link"
     Write-Host ""
     Write-Host "Account 2: $($account2.User.UserPrincipalName)"
-    Write-Host "  Password: $($account2.Password)"
+    Write-Host "  Password: [REDACTED]"
     Write-Host "  TAP Link: $tap2Link"
     Write-Host ""
     Write-Host "Group: psg-ice ($($group.Id))"
@@ -220,8 +244,6 @@ try {
     Write-Host "1. Share TAP links with end users securely"
     Write-Host "2. Users authenticate and register passkeys"
     Write-Host "3. Assign Global Administrator role to both accounts"
-    Write-Host "4. Store passwords and TAPs in secure vault"
-    
 }
 catch {
     Write-Host "Error: $_" -ForegroundColor Red
