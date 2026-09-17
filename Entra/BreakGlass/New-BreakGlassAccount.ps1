@@ -22,7 +22,7 @@ param(
 $ctx = $null
 try { $ctx = Get-MgContext } catch { }
 if (-not $ctx) {
-    $connectParams = @{ Scopes = @("User.ReadWrite.All", "Group.ReadWrite.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess") }
+    $connectParams = @{ Scopes = @("User.ReadWrite.All", "Group.ReadWrite.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess", "UserAuthenticationMethod.ReadWrite.All") }
     if ($TenantId) { $connectParams.TenantId = $TenantId }
     Connect-MgGraph @connectParams
 }
