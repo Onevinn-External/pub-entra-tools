@@ -143,8 +143,14 @@ try {
             Write-Host "  ✗ Certificate file not found: $CertificatePath" -ForegroundColor Red
             exit 1
         }
-        $fileBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $CertificatePath).Path)
-        $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($fileBytes)
+        $resolvedPath = (Resolve-Path $CertificatePath).Path
+        if ([System.IO.Path]::GetExtension($resolvedPath) -match '\.pem$') {
+            $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPemFile($resolvedPath)
+        }
+        else {
+            $fileBytes = [System.IO.File]::ReadAllBytes($resolvedPath)
+            $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($fileBytes)
+        }
         $publicCertBytes = $publicCert.RawData
         Write-Host "  ✓ Loaded from file: $CertificatePath" -ForegroundColor Green
     }
@@ -197,13 +203,10 @@ try {
 
             if ($pemData) {
                 $pemString = ($pemData -join "`n")
-                $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
-                    [System.Text.Encoding]::UTF8.GetBytes($pemString)
-                )
-
+                $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPem($pemString, "")
                 if ($publicCert.Thumbprint -ne $Thumbprint) {
-                    Write-Host "  ⚠ Keychain cert thumbprint ($($publicCert.Thumbprint)) doesn't match auth.json ($Thumbprint)" -ForegroundColor Yellow
-                    Write-Host "    The certificate may have been regenerated. Continuing with Keychain cert." -ForegroundColor Yellow
+                    Write-Host "  ✗ Loaded certificate thumbprint ($($publicCert.Thumbprint)) does not match expected thumbprint ($Thumbprint)." -ForegroundColor Red
+                    exit 1
                 }
 
                 $publicCertBytes = $publicCert.RawData

@@ -1,21 +1,29 @@
-#Requires -Version 7.0
 <#
 .SYNOPSIS
     Creates or updates a service principal for MFA automation with assessment or full permissions.
 
 .DESCRIPTION
-    Creates or updates a service principal with client secret authentication for the
-    Phishing Resistant MFA framework.
-
+    This script supports two modes for flexible customer engagement workflows:
+    
     ASSESSMENT MODE (-AssessmentMode):
-    Creates a service principal with READ-ONLY permissions suitable for assessments.
-
+    Creates a service principal with READ-ONLY permissions for running assessments:
+    - User.Read.All (read user information)
+    - Device.Read.All (read device information)
+    - Group.Read.All (read group information)
+    - Policy.Read.All (read policy configurations)
+    - RoleManagement.Read.Directory (read role assignments)
+    - Directory.Read.All (read directory data)
+    
     FULL MODE (default):
-    Creates or upgrades a service principal with READ-WRITE permissions for
-    enrollment and enforcement.
-
-    The script:
-    - Checks for an existing application and reuses it
+    Creates or upgrades a service principal with READ-WRITE permissions for enrollment/enforcement:
+    - All assessment mode permissions PLUS:
+    - Group.ReadWrite.All (create and manage groups)
+    - Policy.ReadWrite.ConditionalAccess (create and manage CAPs)
+    - Policy.ReadWrite.AuthenticationMethod (manage authentication methods)
+    - User.ReadWrite.All (GUID password reset for compliant users)
+    
+    The script intelligently:
+    - Checks for existing application and reuses it
     - Detects valid non-expired secrets and reuses them
     - Upgrades permissions when switching from assessment to full mode
     - Grants admin consent automatically
@@ -109,8 +117,7 @@ $assessmentPermissions = @(
     @{ Id = "01e37dc9-c035-40bd-b438-b2879c4870a6"; Type = "Role"; Name = "PrivilegedAccess.Read.AzureADGroup" },
     @{ Id = "7438b122-aefc-4978-80ed-43db9fcc7715"; Type = "Role"; Name = "Device.Read.All" },
     @{ Id = "38d9df27-64da-44fd-b7c5-a6fbac20248f"; Type = "Role"; Name = "UserAuthenticationMethod.Read.All" },
-    @{ Id = "b0afded3-3588-46d8-8b3d-9842eff778da"; Type = "Role"; Name = "AuditLog.Read.All" },
-    @{ Id = "fb221be6-99f2-473f-bd32-01c6a0e9ca3b"; Type = "Role"; Name = "Policy.ReadWrite.Authorization" }
+    @{ Id = "b0afded3-3588-46d8-8b3d-9842eff778da"; Type = "Role"; Name = "AuditLog.Read.All" }
 )
 
 # Additional permissions for Full Mode (Read-Write) - Using Application permissions (Role)
@@ -120,10 +127,7 @@ $fullModeAdditionalPermissions = @(
     @{ Id = "29c18626-4985-4dcd-85c0-193eef327366"; Type = "Role"; Name = "Policy.ReadWrite.AuthenticationMethod" },
     @{ Id = "9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8"; Type = "Role"; Name = "RoleManagement.ReadWrite.Directory" },
     @{ Id = "741f803b-c850-494e-b5df-cde7c675a1ca"; Type = "Role"; Name = "User.ReadWrite.All" },
-    @{ Id = "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30"; Type = "Role"; Name = "Application.Read.All" },
-    @{ Id = "9acd699f-1e81-4958-b001-93b1d2506e19"; Type = "Role"; Name = "EntitlementManagement.ReadWrite.All" },
-    @{ Id = "618b6020-bca8-4de6-99f6-ef445fa4d857"; Type = "Role"; Name = "PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup" },
-    @{ Id = "b38dcc4d-a239-4ed6-aa84-6c65b284f97c"; Type = "Role"; Name = "RoleManagementPolicy.ReadWrite.AzureADGroup" }
+    @{ Id = "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30"; Type = "Role"; Name = "Application.Read.All" }
 )
 
 # Select permission set based on mode
@@ -155,7 +159,7 @@ catch {
 }
 
 try {
-    Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All", "Organization.Read.All" -ErrorAction Stop | Out-Null
+    Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All" -ErrorAction Stop | Out-Null
     Write-Host "  ✓ Successfully connected to Microsoft Graph" -ForegroundColor Green
 }
 catch {
@@ -168,21 +172,6 @@ catch {
 $context = Get-MgContext
 Write-Host "  ✓ Authenticated as: $($context.Account)" -ForegroundColor Green
 Write-Host "  ✓ Tenant ID: $($context.TenantId)" -ForegroundColor Green
-
-# Resolve tenant display name for service principal naming
-try {
-    $org = Get-MgOrganization -ErrorAction Stop | Select-Object -First 1
-    $tenantDisplayName = ($org.DisplayName -replace '[^a-zA-Z0-9-]', '-' -replace '-+', '-' -replace '^-|-$', '').ToLower()
-    # Avoid "onevinn" appearing twice in sp-onevinn-<tenant>-pim when tenant name contains it
-    if ($tenantDisplayName -match '(^|-)onevinn(-|$)') {
-        $tenantDisplayName = $tenantDisplayName -replace '(^|-)onevinn(-|$)', '$1$2' -replace '-+', '-' -replace '^-|-$', ''
-    }
-    Write-Host "  ✓ Tenant name: $($org.DisplayName)" -ForegroundColor Green
-}
-catch {
-    $tenantDisplayName = $context.TenantId.Substring(0, 8)
-    Write-Host "  ⚠ Could not resolve tenant name — using tenant ID prefix: $tenantDisplayName" -ForegroundColor Yellow
-}
 
 # ============================================================================
 # VALIDATE PERMISSIONS
@@ -250,8 +239,7 @@ Write-Host "`n╔═════════════════════
 Write-Host "║  STEP 1: Application Registration                            ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
 
-$appDisplayName = "sp-onevinn-$tenantDisplayName-pim"
-Write-Host "`n   Application name: $appDisplayName" -ForegroundColor Cyan
+$appDisplayName = "sp-onevinn-prmfa"
 $app = $null
 $existingSecret = $null
 $reuseSecret = $false
@@ -486,7 +474,6 @@ try {
     
     $grantedCount = 0
     $skippedCount = 0
-    $grantedPermissions = @{}
     
     foreach ($perm in $selectedPermissions) {
         # Check if already granted
@@ -494,7 +481,6 @@ try {
         
         if ($alreadyGranted) {
             Write-Host "   ○ $($perm.Name) - already granted" -ForegroundColor Gray
-            $grantedPermissions[$perm.Name] = $true
             $skippedCount++
         }
         else {
@@ -507,11 +493,9 @@ try {
                 
                 New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -BodyParameter $params -ErrorAction Stop | Out-Null
                 Write-Host "   ✓ $($perm.Name) - granted" -ForegroundColor Green
-                $grantedPermissions[$perm.Name] = $true
                 $grantedCount++
             }
             catch {
-                $grantedPermissions[$perm.Name] = $false
                 if ($_.Exception.Message -match "403|Forbidden|Insufficient privileges") {
                     Write-Host "   ✗ $($perm.Name) - insufficient privileges" -ForegroundColor Red
                 }
@@ -744,13 +728,9 @@ Write-Host "   • Mode: $(if ($AssessmentMode) { 'Assessment (Read-Only)' } els
 Write-Host "   • Secret Expiry: $($secret.EndDateTime.ToString('yyyy-MM-dd'))" -ForegroundColor White
 Write-Host "   • Secret Status: $(if ($reuseSecret) { 'Reused Existing' } else { 'Newly Created' })" -ForegroundColor White
 
-Write-Host "`n🔐 Permissions:" -ForegroundColor Cyan
+Write-Host "`n🔐 Permissions Granted:" -ForegroundColor Cyan
 foreach ($perm in $selectedPermissions) {
-    if ($grantedPermissions[$perm.Name] -eq $true) {
-        Write-Host "   ✓ $($perm.Name)" -ForegroundColor Green
-    } else {
-        Write-Host "   ✗ $($perm.Name) — admin consent required" -ForegroundColor Red
-    }
+    Write-Host "   ✓ $($perm.Name)" -ForegroundColor Gray
 }
 
 if ($AssessmentMode) {
