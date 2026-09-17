@@ -184,11 +184,10 @@ function Update-ConditionalAccessPolicies {
     )
     
     $policies = Get-MgIdentityConditionalAccessPolicy
-    $mfaPolicies = $policies | Where-Object {
-        $_.Conditions.ClientApplications.IncludeApplications -or 
-        $_.GrantControls.BuiltInControls -contains "mfa" -or
-        $_.GrantControls.BuiltInControls -contains "compliantDevice"
-    }
+$mfaPolicies = $policies | Where-Object {
+    ($_.GrantControls.BuiltInControls -contains "mfa") -or
+    ($_.GrantControls.BuiltInControls -contains "compliantDevice")
+}
     
     foreach ($policy in $mfaPolicies) {
         if ($policy.State -eq "enabled") {
