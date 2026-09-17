@@ -205,8 +205,8 @@ try {
                 $pemString = ($pemData -join "`n")
                 $publicCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPem($pemString, "")
                 if ($publicCert.Thumbprint -ne $Thumbprint) {
-                    Write-Host "  ⚠ Keychain cert thumbprint ($($publicCert.Thumbprint)) doesn't match auth.json ($Thumbprint)" -ForegroundColor Yellow
-                    Write-Host "    The certificate may have been regenerated. Continuing with Keychain cert." -ForegroundColor Yellow
+                    Write-Host "  ✗ Loaded certificate thumbprint ($($publicCert.Thumbprint)) does not match expected thumbprint ($Thumbprint)." -ForegroundColor Red
+                    exit 1
                 }
 
                 $publicCertBytes = $publicCert.RawData
