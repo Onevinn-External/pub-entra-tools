@@ -83,16 +83,14 @@ The consultant will:
 - [ ] Remove from Downloads folder
 - [ ] Empty Recycle Bin
 
-## What's in the Secure Package?
-
 The `auth.zip` file is password-protected and contains `auth.json` with:
-- `tenantId`: Your Azure tenant ID
-- `clientId`: The application client ID
-- `clientSecret`: The client secret (sensitive!)
-- `applicationId`: The application's object ID
-- `servicePrincipalId`: The service principal's object ID
-- `createdDate`: When the credentials were created
-- `expiresDate`: When the client secret expires
+- `TenantId`: Your Azure tenant ID
+- `ClientId`: The application client ID
+- `ClientSecret`: The client secret (sensitive!)
+- `ExpiryDate`: When the client secret expires
+- `Mode`: `Assessment` or `Full`
+- `LastUpdated`: When the credentials were exported
+- `SecretStatus`: Whether the secret was reused or newly created
 
 **Example structure:**
 ```json
