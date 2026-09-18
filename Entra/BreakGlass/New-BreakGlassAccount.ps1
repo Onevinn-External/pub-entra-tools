@@ -1,4 +1,4 @@
-#Requires -Module Microsoft.Graph.Users, Microsoft.Graph.Groups, Microsoft.Graph.Identity.SignIns, Microsoft.Graph.Identity.DirectoryManagement, KpPwpush
+#Requires -Module Microsoft.Graph.Authentication, Microsoft.Graph.Users, Microsoft.Graph.Groups, Microsoft.Graph.Identity.SignIns, Microsoft.Graph.Identity.DirectoryManagement, Microsoft.Graph.Identity.Governance, KpPwpush
 <#
 .SYNOPSIS
 Creates 2 break-glass accounts with TAPs and adds them to a privileged group while excluding from MFA policies.
