@@ -217,18 +217,16 @@ $mfaPolicies = $policies | Where-Object {
 }
     
     foreach ($policy in $mfaPolicies) {
-        if ($policy.State -eq "enabled") {
-            # Exclude group from policy
-            if ($null -eq $policy.Conditions.Users.ExcludeGroups) {
-                $policy.Conditions.Users.ExcludeGroups = @()
-            }
-            
-            if ($GroupId -notin $policy.Conditions.Users.ExcludeGroups) {
-                $policy.Conditions.Users.ExcludeGroups += $GroupId
-                # Only mutable properties may be sent; the full policy object includes read-only fields that fail schema validation
-                $updateBody = @{ conditions = $policy.Conditions }
-                Update-MgIdentityConditionalAccessPolicy -ConditionalAccessPolicyId $policy.Id -BodyParameter $updateBody
-            }
+        # Exclude the group from every MFA policy, including disabled policies that may be enabled later.
+        if ($null -eq $policy.Conditions.Users.ExcludeGroups) {
+            $policy.Conditions.Users.ExcludeGroups = @()
+        }
+        
+        if ($GroupId -notin $policy.Conditions.Users.ExcludeGroups) {
+            $policy.Conditions.Users.ExcludeGroups += $GroupId
+            # Only mutable properties may be sent; the full policy object includes read-only fields that fail schema validation
+            $updateBody = @{ conditions = $policy.Conditions }
+            Update-MgIdentityConditionalAccessPolicy -ConditionalAccessPolicyId $policy.Id -BodyParameter $updateBody
         }
     }
 }
