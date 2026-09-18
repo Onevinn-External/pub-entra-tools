@@ -149,6 +149,21 @@ function Send-TapViaPwPush {
     }
 }
 
+function Send-PasswordViaPwPush {
+    <#
+    .SYNOPSIS
+    Pushes password to pwpush and returns share link
+    #>
+    param(
+        [securestring]$Password,
+        [string]$AccountUpn
+    )
+    
+    $plainTextPassword = [System.Net.NetworkCredential]::new('', $Password).Password
+    $response = New-KpPwpush -Payload $plainTextPassword -Note "Password for $AccountUpn. Delete after use." -ErrorAction Stop
+    return $response.html_url
+}
+
 function New-PrivilegedGroup {
     <#
     .SYNOPSIS
@@ -236,6 +251,16 @@ try {
     # Push TAPs via pwpush
     $tap1Link = Send-TapViaPwPush -TapCode $tap1 -AccountUpn $account1.User.UserPrincipalName
     $tap2Link = Send-TapViaPwPush -TapCode $tap2 -AccountUpn $account2.User.UserPrincipalName
+    $password1Params = @{
+        Password = $account1.Password
+        AccountUpn = $account1.User.UserPrincipalName
+    }
+    $password1Link = Send-PasswordViaPwPush @password1Params
+    $password2Params = @{
+        Password = $account2.Password
+        AccountUpn = $account2.User.UserPrincipalName
+    }
+    $password2Link = Send-PasswordViaPwPush @password2Params
     
     # Create privileged group
     $group = New-PrivilegedGroup -MemberIds @($account1.User.Id, $account2.User.Id)
@@ -246,11 +271,11 @@ try {
     # Output summary
     Write-Host "`n=== Break Glass Setup Complete ===" -ForegroundColor Green
     Write-Host "Account 1: $($account1.User.UserPrincipalName)"
-    Write-Host "  Password: [REDACTED]"
+    Write-Host "  Password Link: $password1Link"
     Write-Host "  TAP Link: $tap1Link"
     Write-Host ""
     Write-Host "Account 2: $($account2.User.UserPrincipalName)"
-    Write-Host "  Password: [REDACTED]"
+    Write-Host "  Password Link: $password2Link"
     Write-Host "  TAP Link: $tap2Link"
     Write-Host ""
     Write-Host "Group: psg-ice ($($group.Id))"
