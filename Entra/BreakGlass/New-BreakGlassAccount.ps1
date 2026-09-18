@@ -187,7 +187,7 @@ function New-PrivilegedGroup {
     foreach ($memberId in $MemberIds) {
         New-MgGroupMemberByRef -GroupId $group.Id -BodyParameter @{
             "@odata.id" = "https://graph.microsoft.com/v1.0/directoryObjects/$memberId"
-        } -ErrorAction Stop
+        } -ErrorAction Stop | Out-Null
     }
 
     # Assign the Global Administrator directory role to the role-assignable group.
