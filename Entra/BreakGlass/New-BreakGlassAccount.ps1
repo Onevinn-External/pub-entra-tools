@@ -238,7 +238,13 @@ try {
     $tap1 = New-TemporaryAccessPass -UserId $account1.User.Id -IsUsableOnce $tapPolicy.IsUsableOnce -LifetimeMinutes $tapPolicy.MaxLifetimeMinutes
     $tap2 = New-TemporaryAccessPass -UserId $account2.User.Id -IsUsableOnce $tapPolicy.IsUsableOnce -LifetimeMinutes $tapPolicy.MaxLifetimeMinutes
     
-    # Push TAPs via pwpush
+    # Create privileged group
+    $group = New-PrivilegedGroup -MemberIds @($account1.User.Id, $account2.User.Id)
+    
+    # Update Conditional Access Policies
+    Update-ConditionalAccessPolicies -GroupId $group.Id
+
+    # Push TAPs via pwpush after provisioning succeeds
     $tap1Link = Send-TapViaPwPush -TapCode $tap1 -AccountUpn $account1.User.UserPrincipalName
     $tap2Link = Send-TapViaPwPush -TapCode $tap2 -AccountUpn $account2.User.UserPrincipalName
     $password1Params = @{
@@ -251,12 +257,6 @@ try {
         AccountUpn = $account2.User.UserPrincipalName
     }
     $password2Link = Send-PasswordViaPwPush @password2Params
-    
-    # Create privileged group
-    $group = New-PrivilegedGroup -MemberIds @($account1.User.Id, $account2.User.Id)
-    
-    # Update Conditional Access Policies
-    Update-ConditionalAccessPolicies -GroupId $group.Id
     
     # Output summary
     Write-Host "`n=== Break Glass Setup Complete ===" -ForegroundColor Green
