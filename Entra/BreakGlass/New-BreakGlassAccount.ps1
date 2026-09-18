@@ -216,6 +216,10 @@ $mfaPolicies = $policies | Where-Object {
 }
 
 # Main execution
+$account1 = $null
+$account2 = $null
+$group = $null
+
 try {
     # Create 2 break-glass accounts
     $account1 = New-BreakGlassAccount
@@ -254,6 +258,18 @@ try {
     Write-Host "3. Assign Global Administrator role to both accounts"
 }
 catch {
-    Write-Host "Error: $_" -ForegroundColor Red
+    $errorRecord = $_
+
+    if ($null -ne $group) {
+        Remove-MgGroup -GroupId $group.Id -ErrorAction SilentlyContinue
+    }
+
+    foreach ($account in @($account1, $account2)) {
+        if ($null -ne $account) {
+            Remove-MgUser -UserId $account.User.Id -ErrorAction SilentlyContinue
+        }
+    }
+
+    Write-Host "Error: $errorRecord" -ForegroundColor Red
     exit 1
 }
