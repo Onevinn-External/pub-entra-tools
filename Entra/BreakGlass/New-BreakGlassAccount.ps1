@@ -1,4 +1,4 @@
-#Requires -Module Microsoft.Graph.Users, Microsoft.Graph.Groups, Microsoft.Graph.Identity.SignIns, KpPwpush
+#Requires -Module Microsoft.Graph.Users, Microsoft.Graph.Groups, Microsoft.Graph.Identity.SignIns, Microsoft.Graph.Identity.DirectoryManagement, KpPwpush
 <#
 .SYNOPSIS
 Creates 2 break-glass accounts with TAPs and adds them to a privileged group while excluding from MFA policies.
@@ -20,7 +20,7 @@ param(
 
 # Connect to Microsoft Graph
 if ($Interactive) {
-    Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess", "UserAuthenticationMethod.ReadWrite.All" -TenantId $TenantId
+    Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "RoleManagement.ReadWrite.Directory", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess", "UserAuthenticationMethod.ReadWrite.All" -TenantId $TenantId
 }
 
 # KpPwpush must be initialized before New-KpPwpush can be used
@@ -158,11 +158,12 @@ function New-PrivilegedGroup {
     )
     
     $groupParams = @{
-        DisplayName         = "psg-ice"
-        Description         = "Privileged Break Glass Group - Infrastructure/Contingency/Emergency"
+        DisplayName         = "sg-$(-join ((48..57) + (97..122) | Get-Random -Count 8 | ForEach-Object { [char]$_ }))"
+        Description         = "Privileged Break Glass Group"
         MailEnabled         = $false
         SecurityEnabled     = $true
-        MailNickname        = "psg-ice"
+        IsAssignableToRole  = $true
+        MailNickname        = "bg-$(-join ((48..57) + (97..122) | Get-Random -Count 8 | ForEach-Object { [char]$_ }))"
     }
     
     $group = New-MgGroup @groupParams
@@ -170,6 +171,14 @@ function New-PrivilegedGroup {
     foreach ($memberId in $MemberIds) {
         New-MgGroupMember -GroupId $group.Id -DirectoryObjectId $memberId
     }
+
+    # Assign the Global Administrator directory role to the role-assignable group.
+    $roleAssignmentParams = @{
+        principalId      = $group.Id
+        roleDefinitionId = "62e90394-69f5-4237-9190-012177145e10"
+        directoryScopeId = "/"
+    }
+    New-MgRoleManagementDirectoryRoleAssignment -BodyParameter $roleAssignmentParams
     
     return $group
 }
