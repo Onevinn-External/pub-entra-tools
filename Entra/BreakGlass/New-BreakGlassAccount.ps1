@@ -196,7 +196,7 @@ function New-PrivilegedGroup {
         roleDefinitionId = "62e90394-69f5-4237-9190-012177145e10"
         directoryScopeId = "/"
     }
-    New-MgRoleManagementDirectoryRoleAssignment -BodyParameter $roleAssignmentParams
+    New-MgRoleManagementDirectoryRoleAssignment -BodyParameter $roleAssignmentParams -ErrorAction Stop | Out-Null
     
     return $group
 }
