@@ -19,6 +19,7 @@ param(
 )
 
 # Connect to Microsoft Graph
+$ErrorActionPreference = 'Stop'
 if ($Interactive) {
     Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "RoleManagement.ReadWrite.Directory", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess", "UserAuthenticationMethod.ReadWrite.All" -TenantId $TenantId
 }
