@@ -21,7 +21,7 @@ param(
 # Connect to Microsoft Graph
 $ErrorActionPreference = 'Stop'
 if ($Interactive) {
-    Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "RoleManagement.ReadWrite.Directory", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess", "UserAuthenticationMethod.ReadWrite.All" -TenantId $TenantId
+    Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "Policy.Read.All", "Policy.ReadWrite.ConditionalAccess", "UserAuthenticationMethod.ReadWrite.All" -TenantId $TenantId
 }
 
 # KpPwpush must be initialized before New-KpPwpush can be used
@@ -190,14 +190,6 @@ function New-PrivilegedGroup {
         } -ErrorAction Stop | Out-Null
     }
 
-    # Assign the Global Administrator directory role to the role-assignable group.
-    $roleAssignmentParams = @{
-        principalId      = $group.Id
-        roleDefinitionId = "62e90394-69f5-4237-9190-012177145e10"
-        directoryScopeId = "/"
-    }
-    New-MgRoleManagementDirectoryRoleAssignment -BodyParameter $roleAssignmentParams -ErrorAction Stop | Out-Null
-    
     return $group
 }
 
