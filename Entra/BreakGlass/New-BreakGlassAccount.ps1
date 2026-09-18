@@ -194,7 +194,7 @@ function Update-ConditionalAccessPolicies {
         [string]$GroupId
     )
     
-    $policies = Get-MgIdentityConditionalAccessPolicy
+    $policies = Get-MgIdentityConditionalAccessPolicy -All
 $mfaPolicies = $policies | Where-Object {
     ($_.GrantControls.BuiltInControls -contains "mfa") -or
     ($null -ne $_.GrantControls.AuthenticationStrength)
